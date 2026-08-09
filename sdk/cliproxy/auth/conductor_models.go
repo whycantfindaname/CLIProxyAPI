@@ -262,6 +262,7 @@ func (m *Manager) executionModelCandidatesWithAlias(auth *Auth, routeModel strin
 	if aliasResult.ForceMapping && auth != nil && auth.Attributes != nil && strings.EqualFold(strings.TrimSpace(auth.Attributes[homeForceMappingAttributeKey]), "true") {
 		aliasResult.OriginalAlias = strings.TrimSpace(routeModel)
 	}
+	aliasResult = restoreAuthPrefixForForceMapping(auth, routeModel, aliasResult)
 	upstreamModel := executionAliasPoolModel(auth, requestedModel, aliasResult)
 
 	var candidates []string
@@ -614,6 +615,23 @@ func compileAPIKeyModelAliasForModels[T interface {
 		add(name, name)
 		add(thinking.ParseSuffix(name).ModelName, name)
 	}
+}
+
+func restoreAuthPrefixForForceMapping(auth *Auth, routeModel string, result OAuthModelAliasResult) OAuthModelAliasResult {
+	if auth == nil || !result.ForceMapping {
+		return result
+	}
+	prefix := strings.TrimSpace(auth.Prefix)
+	originalAlias := strings.TrimSpace(result.OriginalAlias)
+	if prefix == "" || originalAlias == "" {
+		return result
+	}
+	needle := prefix + "/"
+	if !strings.HasPrefix(strings.TrimSpace(routeModel), needle) || strings.HasPrefix(originalAlias, needle) {
+		return result
+	}
+	result.OriginalAlias = needle + originalAlias
+	return result
 }
 
 func rewriteModelForAuth(model string, auth *Auth) string {

@@ -7,7 +7,6 @@ import (
 	"crypto/subtle"
 	"fmt"
 	"net/http"
-	"os"
 	"path/filepath"
 	"strings"
 	"sync"
@@ -69,17 +68,25 @@ type configReloadSnapshot struct {
 
 // NewHandler creates a new management handler instance.
 func NewHandler(cfg *config.Config, configFilePath string, manager *coreauth.Manager) *Handler {
-	envSecret, _ := os.LookupEnv("MANAGEMENT_PASSWORD")
-	envSecret = strings.TrimSpace(envSecret)
+	runtimeSecret, errSecret := LoadRuntimeManagementSecret()
+	if errSecret != nil {
+		log.WithError(errSecret).Error("failed to load runtime management password")
+	}
+	return NewHandlerWithRuntimeManagementSecret(cfg, configFilePath, manager, runtimeSecret)
+}
 
+// NewHandlerWithRuntimeManagementSecret creates a management handler with an
+// already resolved runtime management password.
+func NewHandlerWithRuntimeManagementSecret(cfg *config.Config, configFilePath string, manager *coreauth.Manager, runtimeSecret string) *Handler {
+	runtimeSecret = strings.TrimSpace(runtimeSecret)
 	h := &Handler{
 		cfg:                 cfg,
 		configFilePath:      configFilePath,
 		failedAttempts:      make(map[string]*attemptInfo),
 		authManager:         manager,
 		tokenStore:          sdkAuth.GetTokenStore(),
-		allowRemoteOverride: envSecret != "",
-		envSecret:           envSecret,
+		allowRemoteOverride: runtimeSecret != "",
+		envSecret:           runtimeSecret,
 	}
 	h.startAttemptCleanup()
 	return h

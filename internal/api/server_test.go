@@ -1055,6 +1055,25 @@ func TestManagementResponseExposesPluginSupportHeaderForCORS(t *testing.T) {
 	}
 }
 
+func TestManagementPasswordFileEnablesManagementRoutes(t *testing.T) {
+	t.Setenv("MANAGEMENT_PASSWORD", "")
+	passwordFile := filepath.Join(t.TempDir(), "management-password")
+	if errWrite := os.WriteFile(passwordFile, []byte("test-management-key\n"), 0o600); errWrite != nil {
+		t.Fatalf("write management password file: %v", errWrite)
+	}
+	t.Setenv("MANAGEMENT_PASSWORD_FILE", passwordFile)
+
+	server := newTestServer(t)
+	req := httptest.NewRequest(http.MethodGet, "/v0/management/config", nil)
+	req.Header.Set("Authorization", "Bearer test-management-key")
+	rr := httptest.NewRecorder()
+	server.engine.ServeHTTP(rr, req)
+
+	if rr.Code != http.StatusOK {
+		t.Fatalf("status = %d, want %d body=%s", rr.Code, http.StatusOK, rr.Body.String())
+	}
+}
+
 func TestOAuthCallbackRouteSkipsManagementKeyMiddleware(t *testing.T) {
 	t.Setenv("MANAGEMENT_PASSWORD", "test-management-key")
 

@@ -90,8 +90,8 @@ type Server struct {
 	// managementRoutesEnabled controls whether management endpoints serve real handlers.
 	managementRoutesEnabled atomic.Bool
 
-	// envManagementSecret indicates whether MANAGEMENT_PASSWORD is configured.
-	envManagementSecret bool
+	// runtimeManagementSecret indicates whether a runtime management password is configured.
+	runtimeManagementSecret bool
 
 	localPassword string
 
@@ -163,23 +163,25 @@ func NewServer(cfg *config.Config, authManager *auth.Manager, accessManager *sdk
 		wd = configFilePath
 	}
 
-	envAdminPassword, envAdminPasswordSet := os.LookupEnv("MANAGEMENT_PASSWORD")
-	envAdminPassword = strings.TrimSpace(envAdminPassword)
-	envManagementSecret := envAdminPasswordSet && envAdminPassword != ""
+	runtimeManagementSecret, errRuntimeSecret := managementHandlers.LoadRuntimeManagementSecret()
+	if errRuntimeSecret != nil {
+		log.WithError(errRuntimeSecret).Error("failed to load runtime management password")
+	}
+	runtimeManagementSecretConfigured := runtimeManagementSecret != ""
 
 	// Create server instance
 	s := &Server{
-		engine:              engine,
-		handlers:            handlers.NewBaseAPIHandlers(effectiveSDKConfig(cfg), authManager),
-		cfg:                 cfg,
-		accessManager:       accessManager,
-		requestLogger:       requestLogger,
-		loggerToggle:        toggle,
-		configFilePath:      configFilePath,
-		currentPath:         wd,
-		envManagementSecret: envManagementSecret,
-		wsRoutes:            make(map[string]struct{}),
-		pluginHost:          optionState.pluginHost,
+		engine:                  engine,
+		handlers:                handlers.NewBaseAPIHandlers(effectiveSDKConfig(cfg), authManager),
+		cfg:                     cfg,
+		accessManager:           accessManager,
+		requestLogger:           requestLogger,
+		loggerToggle:            toggle,
+		configFilePath:          configFilePath,
+		currentPath:             wd,
+		runtimeManagementSecret: runtimeManagementSecretConfigured,
+		wsRoutes:                make(map[string]struct{}),
+		pluginHost:              optionState.pluginHost,
 
 		exampleAPIKeySafeModeEnabled: optionState.exampleAPIKeySafeMode,
 	}
@@ -201,7 +203,7 @@ func NewServer(cfg *config.Config, authManager *auth.Manager, accessManager *sdk
 	auth.SetTransientErrorCooldownSeconds(cfg.TransientErrorCooldownSeconds)
 	applySignatureCacheConfig(nil, cfg)
 	// Initialize management handler
-	s.mgmt = managementHandlers.NewHandler(cfg, configFilePath, authManager)
+	s.mgmt = managementHandlers.NewHandlerWithRuntimeManagementSecret(cfg, configFilePath, authManager, runtimeManagementSecret)
 	s.mgmt.SetPluginHost(optionState.pluginHost)
 	s.mgmt.SetConfigReloadHook(optionState.configReloadHook)
 	if optionState.localPassword != "" {
@@ -232,7 +234,7 @@ func NewServer(cfg *config.Config, authManager *auth.Manager, accessManager *sdk
 
 	// Register management routes when configuration or environment secrets are available,
 	// or when a local management password is provided (e.g. TUI mode).
-	hasManagementSecret := cfg.RemoteManagement.SecretKey != "" || envManagementSecret || s.localPassword != ""
+	hasManagementSecret := cfg.RemoteManagement.SecretKey != "" || runtimeManagementSecretConfigured || s.localPassword != ""
 	s.managementRoutesEnabled.Store(hasManagementSecret)
 	redisqueue.SetEnabled(hasManagementSecret || (cfg != nil && cfg.Home.Enabled))
 	if hasManagementSecret {

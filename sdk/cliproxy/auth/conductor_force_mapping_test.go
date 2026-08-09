@@ -636,6 +636,88 @@ func setupAPIKeyForceMappingManager(t *testing.T, provider, upstreamModel, alias
 	return manager, executor
 }
 
+func setupPrefixedClaudeAPIKeyForceMappingManager(t *testing.T, prefix, upstreamModel, aliasModel string) (*Manager, *forceMappingExecutor) {
+	t.Helper()
+	manager := NewManager(nil, nil, nil)
+	executor := &forceMappingExecutor{id: "claude"}
+	manager.RegisterExecutor(executor)
+
+	apiKey := "claude-prefixed-force-mapping-key"
+	cfg := &internalconfig.Config{}
+	cfg.ForceModelPrefix = true
+	cfg.ClaudeKey = []internalconfig.ClaudeKey{{
+		APIKey: apiKey,
+		Prefix: prefix,
+		Models: []internalconfig.ClaudeModel{{
+			Name:         upstreamModel,
+			Alias:        aliasModel,
+			ForceMapping: true,
+		}},
+	}}
+	manager.SetConfig(cfg)
+
+	auth := &Auth{
+		ID:       "claude-prefixed-force-mapping-auth",
+		Provider: "claude",
+		Prefix:   prefix,
+		Attributes: map[string]string{
+			"api_key": apiKey,
+		},
+	}
+	if _, errRegister := manager.Register(context.Background(), auth); errRegister != nil {
+		t.Fatalf("register auth: %v", errRegister)
+	}
+
+	requestedModel := prefix + "/" + aliasModel
+	reg := registry.GetGlobalRegistry()
+	reg.RegisterClient(auth.ID, "claude", []*registry.ModelInfo{{ID: requestedModel}})
+	t.Cleanup(func() {
+		reg.UnregisterClient(auth.ID)
+	})
+	manager.RefreshSchedulerEntry(auth.ID)
+
+	return manager, executor
+}
+
+func TestManagerExecute_APIKeyPrefixedAliasForceMappingRestoresFullModel(t *testing.T) {
+	const (
+		prefix        = "oppo"
+		upstreamModel = "glm-5.2"
+		aliasModel    = "claude-code-glm-5.2"
+	)
+	requestedModel := prefix + "/" + aliasModel
+	manager, executor := setupPrefixedClaudeAPIKeyForceMappingManager(t, prefix, upstreamModel, aliasModel)
+
+	resp, errExecute := manager.Execute(context.Background(), []string{"claude"}, cliproxyexecutor.Request{Model: requestedModel}, cliproxyexecutor.Options{})
+	if errExecute != nil {
+		t.Fatalf("execute error = %v, want success", errExecute)
+	}
+	if got := executor.ExecuteModels(); len(got) != 1 || got[0] != upstreamModel {
+		t.Fatalf("execute models = %v, want [%s]", got, upstreamModel)
+	}
+	if got := string(resp.Payload); !strings.Contains(got, `"model":"`+requestedModel+`"`) || strings.Contains(got, `"model":"`+aliasModel+`"`) || forceMappingPayloadLeaksUpstream(got, upstreamModel) {
+		t.Fatalf("response payload = %s, want full prefixed alias %q", got, requestedModel)
+	}
+
+	streamResult, errStream := manager.ExecuteStream(context.Background(), []string{"claude"}, cliproxyexecutor.Request{Model: requestedModel}, cliproxyexecutor.Options{})
+	if errStream != nil {
+		t.Fatalf("execute stream error = %v, want success", errStream)
+	}
+	if got := executor.StreamModels(); len(got) != 1 || got[0] != upstreamModel {
+		t.Fatalf("stream models = %v, want [%s]", got, upstreamModel)
+	}
+	var streamPayload []byte
+	for chunk := range streamResult.Chunks {
+		if chunk.Err != nil {
+			t.Fatalf("unexpected stream error: %v", chunk.Err)
+		}
+		streamPayload = append(streamPayload, chunk.Payload...)
+	}
+	if got := string(streamPayload); !strings.Contains(got, `"model":"`+requestedModel+`"`) || strings.Contains(got, `"model":"`+aliasModel+`"`) || forceMappingPayloadLeaksUpstream(got, upstreamModel) {
+		t.Fatalf("stream payload = %s, want full prefixed alias %q", got, requestedModel)
+	}
+}
+
 func TestManagerExecute_APIKeyAliasForceMappingRewritesResponse(t *testing.T) {
 	tests := []struct {
 		provider      string
