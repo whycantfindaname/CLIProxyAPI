@@ -73,6 +73,68 @@ func TestKimiExecutorClaudeRequestPreservesInternalModelSemantics(t *testing.T) 
 	}
 }
 
+func TestKimiExecutorPreservesAssistantContentAndToolCallsFromResponsesHistory(t *testing.T) {
+	var upstreamBody []byte
+	ctx := context.WithValue(context.Background(), "cliproxy.roundtripper", kimiRoundTripperFunc(func(req *http.Request) (*http.Response, error) {
+		var errRead error
+		upstreamBody, errRead = io.ReadAll(req.Body)
+		if errRead != nil {
+			return nil, errRead
+		}
+		return &http.Response{
+			StatusCode: http.StatusOK,
+			Header:     http.Header{"Content-Type": []string{"application/json"}},
+			Body: io.NopCloser(strings.NewReader(
+				`{"id":"chatcmpl_test","object":"chat.completion","created":1,"model":"k3","choices":[{"index":0,"message":{"role":"assistant","content":"done"},"finish_reason":"stop"}],"usage":{"prompt_tokens":1,"completion_tokens":1,"total_tokens":2}}`,
+			)),
+		}, nil
+	}))
+
+	executor := NewKimiExecutor(&config.Config{})
+	auth := &cliproxyauth.Auth{
+		Attributes: map[string]string{},
+		Metadata:   map[string]any{"access_token": "test-token"},
+	}
+	payload := []byte(`{
+		"model":"kimi-k3",
+		"input":[
+			{"type":"reasoning","id":"rs_1","summary":[{"type":"summary_text","text":"inspect the next step"}]},
+			{"type":"message","role":"assistant","content":[{"type":"output_text","text":"Step 3 completed; continue to step 4."}]},
+			{"type":"function_call","call_id":"call_4","name":"exec_command","arguments":"{\"cmd\":\"pwd\"}"},
+			{"type":"function_call_output","call_id":"call_4","output":"ok"}
+		]
+	}`)
+
+	_, err := executor.Execute(ctx, auth, cliproxyexecutor.Request{
+		Model:   "kimi-k3",
+		Payload: payload,
+	}, cliproxyexecutor.Options{
+		SourceFormat:    sdktranslator.FormatOpenAIResponse,
+		OriginalRequest: payload,
+	})
+	if err != nil {
+		t.Fatalf("Execute() error = %v", err)
+	}
+
+	messages := gjson.GetBytes(upstreamBody, "messages").Array()
+	if got := len(messages); got != 2 {
+		t.Fatalf("upstream messages count = %d, want 2; body=%s", got, upstreamBody)
+	}
+	assistant := messages[0]
+	if got := assistant.Get("content.0.text").String(); got != "Step 3 completed; continue to step 4." {
+		t.Fatalf("assistant content = %q, want preserved text; body=%s", got, upstreamBody)
+	}
+	if got := assistant.Get("reasoning_content").String(); got != "inspect the next step" {
+		t.Fatalf("assistant reasoning_content = %q, want inspect the next step; body=%s", got, upstreamBody)
+	}
+	if got := assistant.Get("tool_calls.0.id").String(); got != "call_4" {
+		t.Fatalf("assistant tool call ID = %q, want call_4; body=%s", got, upstreamBody)
+	}
+	if got := messages[1].Get("tool_call_id").String(); got != "call_4" {
+		t.Fatalf("tool output call ID = %q, want call_4; body=%s", got, upstreamBody)
+	}
+}
+
 func TestKimiExecutorCountTokensUsesCanonicalUpstreamModel(t *testing.T) {
 	var upstreamRequest *http.Request
 	var upstreamBody []byte
@@ -362,6 +424,63 @@ func TestNormalizeKimiToolMessageLinks_InsertsFallbackReasoningWhenMissing(t *te
 	}
 	if reasoning.String() != "[reasoning unavailable]" {
 		t.Fatalf("messages.0.reasoning_content = %q, want %q", reasoning.String(), "[reasoning unavailable]")
+	}
+}
+
+func TestNormalizeKimiToolMessageLinks_DoesNotReuseUnavailableReasoning(t *testing.T) {
+	body := []byte(`{
+		"messages":[
+			{"role":"assistant","reasoning_content":"[reasoning unavailable]"},
+			{"role":"assistant","content":"current summary","tool_calls":[{"id":"call_1","type":"function","function":{"name":"list_directory","arguments":"{}"}}]}
+		]
+	}`)
+
+	out, err := normalizeKimiToolMessageLinks(body)
+	if err != nil {
+		t.Fatalf("normalizeKimiToolMessageLinks() error = %v", err)
+	}
+
+	got := gjson.GetBytes(out, "messages.1.reasoning_content").String()
+	if got != "current summary" {
+		t.Fatalf("messages.1.reasoning_content = %q, want %q", got, "current summary")
+	}
+}
+
+func TestNormalizeKimiToolMessageLinks_UnavailableReasoningDoesNotOverridePreviousReasoning(t *testing.T) {
+	body := []byte(`{
+		"messages":[
+			{"role":"assistant","reasoning_content":"real reasoning"},
+			{"role":"assistant","reasoning_content":"[reasoning unavailable]"},
+			{"role":"assistant","tool_calls":[{"id":"call_1","type":"function","function":{"name":"list_directory","arguments":"{}"}}]}
+		]
+	}`)
+
+	out, err := normalizeKimiToolMessageLinks(body)
+	if err != nil {
+		t.Fatalf("normalizeKimiToolMessageLinks() error = %v", err)
+	}
+
+	got := gjson.GetBytes(out, "messages.2.reasoning_content").String()
+	if got != "real reasoning" {
+		t.Fatalf("messages.2.reasoning_content = %q, want %q", got, "real reasoning")
+	}
+}
+
+func TestNormalizeKimiToolMessageLinks_ReplacesUnavailableReasoningContent(t *testing.T) {
+	body := []byte(`{
+		"messages":[
+			{"role":"assistant","content":"assistant summary","tool_calls":[{"id":"call_1","type":"function","function":{"name":"list_directory","arguments":"{}"}}],"reasoning_content":"[reasoning unavailable]"}
+		]
+	}`)
+
+	out, err := normalizeKimiToolMessageLinks(body)
+	if err != nil {
+		t.Fatalf("normalizeKimiToolMessageLinks() error = %v", err)
+	}
+
+	got := gjson.GetBytes(out, "messages.0.reasoning_content").String()
+	if got != "assistant summary" {
+		t.Fatalf("messages.0.reasoning_content = %q, want %q", got, "assistant summary")
 	}
 }
 
