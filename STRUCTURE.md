@@ -1,12 +1,12 @@
 # CLIProxyAPI Structure and Maintenance Boundaries
 
-This document describes the role of this personal fork in the Infra workspace, its code boundaries, and its normal verification entry points. It is a repository structure and maintenance contract, not a deployment record, runtime-status report, or release promise.
+This guide is for Infra maintainers and Agents working in `Tools/CLIProxyAPI`. It defines the fork's Infra role, repository boundaries, personal patch surface, and verification entry points. It records source and configuration boundaries; it does not record deployment or runtime status.
 
 ## Evidence basis
 
-This description is based on the repository's Git inventory, `find` output, source/configuration inspection, and the branch comparison against the upstream baseline.
+The Infra manifest (`manifests/companion-repositories.json`) is authoritative for repository identity, branch, remote relationship, component, consumers, and publish status. Git-tracked paths, source/configuration files, and tests are authoritative for repository structure and behavior. Compare `origin/main...lwj_dev` to identify the personal patch surface; `diff.md` provides supplementary historical context.
 
-The observed Infra `manifests/companion-repositories.json` entry records:
+The manifest entry for `cliproxyapi` records:
 
 - `workspace_path`: `Tools/CLIProxyAPI`
 - `repository`: `https://github.com/whycantfindaname/CLIProxyAPI.git`
@@ -17,31 +17,29 @@ The observed Infra `manifests/companion-repositories.json` entry records:
 - `clone_remote`: `fork`
 - `consumers`: `cliproxyapi-service`, `cpamp-collector`, `coding-agents`
 
-The manifest's `commit` field is the immutable bootstrap pin. Read that value from the Infra manifest rather than duplicating it here: publishing this document advances the companion commit, so a copied SHA would be stale by construction. The pin is not a claim about deployment state or remote freshness.
-
-If the branch, remotes, manifest pin, or directory responsibilities change, update this evidence section and the boundary descriptions below.
+The manifest's `commit` field is the immutable bootstrap pin. Keep that value in the Infra manifest instead of copying a SHA into this guide; the pin belongs to the companion-repository record, not to this repository's runtime or deployment state.
 
 ## Infra role and consumers
 
-The Infra manifest declares this repository as the `cliproxyapi` companion repository for the CLIProxyAPI service and its reusable SDK.
+This repository contains the CLIProxyAPI service under `cmd/server/` and the reusable SDK under `sdk/cliproxy/`. The Infra manifest records it as the `cliproxyapi` companion repository.
 
 Manifest-declared consumers are:
 
 - `cliproxyapi-service`: builds the proxy service from `cmd/server`.
-- `cpamp-collector`: the CPA-Manager-Plus collector consumer recorded by the manifest. The concrete interface contract is maintained by the consumer and Infra configuration; the manifest does not prove that a collector process is running.
+- `cpamp-collector`: the CPA-Manager-Plus collector consumer recorded by the manifest. The concrete interface contract is maintained by the consumer and Infra configuration.
 - `coding-agents`: use the service as an OpenAI-, Gemini-, Claude-, or Codex-compatible endpoint.
 
-The same Infra configuration declares `cpa-usage-monitoring` as a service relationship produced by `cliproxyapi` and consumed by `cpamp`, and selects `cliproxyapi` in the macOS, Oppo Linux, and Oppo Windows repository sets. These are workspace orchestration relationships. They do not mean that this repository contains CPA-Manager-Plus, or that deployment on any machine has completed.
+Infra also records `cpa-usage-monitoring` as a service relationship produced by `cliproxyapi` and consumed by `cpamp`, and selects `cliproxyapi` in the macOS, Oppo Linux, and Oppo Windows repository sets. These declarations describe workspace relationships; they do not add CPA-Manager-Plus code to this repository or assert machine deployment.
 
 ## Personal fork and upstream boundaries
 
 ### Remote and branch responsibilities
 
-- `origin` is the upstream read/synchronization boundary: `https://github.com/router-for-me/CLIProxyAPI.git`.
+- `origin` is the upstream read and synchronization boundary: `https://github.com/router-for-me/CLIProxyAPI.git`.
 - `fork` is the personal repository boundary: `https://github.com/whycantfindaname/CLIProxyAPI.git`.
 - The personal branch described by the Infra entry is `lwj_dev`.
-- To identify personal changes, use `git diff origin/main...lwj_dev` together with the commit history. Do not infer the current difference from the older `diff.md` alone.
-- The maintenance rule is to update the local `main` from upstream first, then merge the intended upstream state into `lwj_dev`. This document does not authorize fetch, merge, commit, or push, and does not claim that any of those actions occurred.
+- Identify personal changes with `git diff origin/main...lwj_dev` and the commit history.
+- For upstream synchronization, update local `main` from `origin` first, then merge the intended upstream state into `lwj_dev`.
 
 ### Responsibility of the personal patch
 
@@ -49,20 +47,20 @@ Relative to the upstream comparison baseline, the personal branch's controlled c
 
 | Path | Fork-side responsibility | Main verification entry |
 | --- | --- | --- |
-| `AGENTS.md`, `CLAUDE.md` | Keep the repository-local Agent instructions on one source: `AGENTS.md` is a symbolic link to `CLAUDE.md`. This affects Agent entry behavior, not service runtime behavior. | `git ls-tree HEAD AGENTS.md CLAUDE.md` |
+| `AGENTS.md`, `CLAUDE.md` | Keep repository-local Agent instructions on one source: `AGENTS.md` is a symbolic link to `CLAUDE.md`. This affects Agent entry behavior, not service runtime behavior. | `git ls-tree HEAD AGENTS.md CLAUDE.md` |
 | `internal/runtime/executor/codex_websockets_executor.go` | On top of the existing Codex HTTP/WebSocket executors, detect streaming requests whose resolved payload has `service_tier=priority` and whose auth enables `websockets=true`, then select the upstream WebSocket. Standard HTTP, image requests, non-streaming requests, and existing downstream-WebSocket paths retain their existing boundaries. The probe reuses translation, thinking, and payload-rule resolution. | `go test ./internal/runtime/executor -run 'CodexAutoExecutor|CodexPriority'` |
 | `internal/runtime/executor/codex_websockets_executor_priority_test.go` | Lock down the transport choice, payload overrides, Claude ingress, thinking suffix, HTTP fallback, image exclusion, and non-streaming boundaries described above. | Same as above |
-| `internal/api/handlers/management/runtime_secret.go`, `internal/api/handlers/management/runtime_secret_test.go`, `internal/api/handlers/management/handler.go`, `internal/api/server.go`, `internal/api/server_reload.go`, `internal/api/server_test.go` | Add the runtime management-password file input `MANAGEMENT_PASSWORD_FILE`. The direct environment value `MANAGEMENT_PASSWORD` takes precedence; file contents are trimmed; the server resolves the runtime secret at startup and uses it to enable management routes and the authentication override. | `go test ./internal/api/handlers/management -run TestLoadRuntimeManagementSecret`; `go test ./internal/api -run TestManagementPasswordFile` |
+| `internal/api/handlers/management/runtime_secret.go`, `internal/api/handlers/management/runtime_secret_test.go`, `internal/api/handlers/management/handler.go`, `internal/api/server.go`, `internal/api/server_reload.go`, `internal/api/server_test.go` | Add the runtime management-password file input `MANAGEMENT_PASSWORD_FILE`. A trimmed, non-empty `MANAGEMENT_PASSWORD` value takes precedence; the file path and file contents are trimmed; the server resolves the runtime secret at startup and uses it to enable management routes and the authentication override. | `go test ./internal/api/handlers/management -run TestLoadRuntimeManagementSecret`; `go test ./internal/api -run TestManagementPasswordFile` |
 | `sdk/cliproxy/auth/conductor_models.go` | When force mapping is enabled and the requested model carries an auth prefix, restore the full prefixed alias in the response so the upstream model name is not exposed as the client-visible model name. | `go test ./sdk/cliproxy/auth -run TestManagerExecute_APIKeyPrefixedAliasForceMappingRestoresFullModel` |
 | `sdk/cliproxy/auth/conductor_force_mapping_test.go` | Cover non-streaming and streaming response rewriting for a prefixed Claude API-key alias. | Same as above |
 | `internal/runtime/executor/claude_executor_test.go` | Pin the Claude fingerprint test baseline to the configured `MacOS`/`arm64` assertions. This is a test baseline, not a new runtime setting. | `go test ./internal/runtime/executor -run TestApplyClaudeHeaders` |
-| `diff.md` | Preserve the existing human-maintained branch-difference note. Its comparison baseline can become stale; it does not replace the current Git diff. | `git diff origin/main...lwj_dev` |
+| `diff.md` | Preserve the existing human-maintained branch-difference note. | `git diff origin/main...lwj_dev` |
 
 Production code, SDK code, examples, documentation, and CI files outside this table are treated as upstream-inherited content by default. A fork-side edit to one of those areas must become an identifiable personal patch and be reflected in this document.
 
 ## Top-level directories
 
-The following directories appear as top-level paths in the repository's current `git ls-files` inventory:
+These top-level directories define the repository's main boundaries:
 
 | Path | Content and boundary |
 | --- | --- |
@@ -78,7 +76,7 @@ The following directories appear as top-level paths in the repository's current 
 
 ## Controlled root files
 
-Important controlled root files are grouped by responsibility below; ordinary files do not need individual implementation descriptions here.
+Key root files are grouped by responsibility below:
 
 - Project metadata: `.dockerignore`, `.gitignore`, `go.mod`, `go.sum`, `LICENSE`.
 - Agent and project documentation: [AGENTS.md](AGENTS.md), [CLAUDE.md](CLAUDE.md), [README.md](README.md), [README_CN.md](README_CN.md), [README_JA.md](README_JA.md), [diff.md](diff.md), `STRUCTURE.md`.
@@ -159,7 +157,7 @@ The following are machine or deployment state and must not be written into `STRU
 
 ## Common development and verification entry points
 
-The commands below describe entry points; they do not mean that these services or network operations were run while this document was written. For tests, builds, model fetches, and service operations, follow [CLAUDE.md](CLAUDE.md) and set proxy state, Go caches, configuration paths, and credential scope explicitly for each command.
+Use these entry points with the explicit command environments required by [CLAUDE.md](CLAUDE.md). Set proxy state, Go caches, configuration paths, and credential scope separately for tests, builds, model fetches, and service operations.
 
 ### Code tests and builds
 
@@ -193,7 +191,7 @@ git diff --check
 git ls-files --error-unmatch STRUCTURE.md
 ```
 
-Model refresh and Compose startup access external systems or change local state; run them only when explicitly needed and the environment is prepared. Markdown-link checks must use the current filesystem; every repository-local link in this document must continue to exist.
+Model refresh and Compose startup access external systems or change local state. Run them only when explicitly needed and the environment is prepared. Markdown-link checks must use the current filesystem; every repository-local link in this document must resolve.
 
 ## When to update this document
 
@@ -206,4 +204,4 @@ Update `STRUCTURE.md` in the same change whenever:
 5. The ignored/persisted boundary for configuration, auth, logs, plugins, storage, or build artifacts changes.
 6. A repository-local file referenced here moves, is removed, or no longer has the described responsibility.
 
-After updates, rerun `git ls-files`, `git diff origin/main...lwj_dev`, the relevant entry-point tests, and `git diff --check`. Report tests, deployment, push, and rollback separately; never infer runtime activation from source presence.
+After an update, review `git ls-files`, compare `origin/main...lwj_dev`, run the relevant entry-point tests, and run `git diff --check`. Report tests, deployment, push, and rollback separately; source presence does not establish runtime activation.
