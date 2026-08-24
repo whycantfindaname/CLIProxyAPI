@@ -1,0 +1,39 @@
+{
+  "id": "00-bootstrap-guidelines",
+  "name": "00-bootstrap-guidelines",
+  "title": "Bootstrap Guidelines",
+  "description": "Document project-specific CLIProxyAPI development guidelines for Trellis",
+  "status": "completed",
+  "dev_type": "docs",
+  "scope": ".trellis/spec/backend",
+  "package": null,
+  "priority": "P1",
+  "creator": "jasonliao",
+  "assignee": "jasonliao",
+  "createdAt": "2026-08-24",
+  "completedAt": "2026-08-24",
+  "branch": "lwj_dev",
+  "base_branch": null,
+  "worktree_path": null,
+  "commit": null,
+  "pr_url": null,
+  "subtasks": [],
+  "children": [],
+  "parent": null,
+  "relatedFiles": [
+    ".trellis/spec/backend/index.md",
+    ".trellis/spec/backend/directory-structure.md",
+    ".trellis/spec/backend/configuration-and-storage.md",
+    ".trellis/spec/backend/error-handling.md",
+    ".trellis/spec/backend/logging-guidelines.md",
+    ".trellis/spec/backend/quality-guidelines.md"
+  ],
+  "notes": "Bootstrap completed from current source, tests, AGENTS.md, CLAUDE.md, STRUCTURE.md, configuration examples, and Go module metadata.",
+  "meta": {
+    "trellis_version": "0.7.0-beta.3",
+    "platforms_verified": [
+      "codex",
+      "claude"
+    ]
+  }
+}
