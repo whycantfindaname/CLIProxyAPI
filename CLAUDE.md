@@ -61,3 +61,15 @@ go build -o test-output ./cmd/server && rm test-output # Verify compile (REQUIRE
 - Use logrus structured logging; avoid leaking secrets/tokens in logs
 - Avoid panics in HTTP handlers; prefer logged errors and meaningful HTTP status codes
 - Timeouts are allowed only during credential acquisition; after an upstream connection is established, do not set timeouts for any subsequent network behavior. Intentional exceptions that must remain allowed are the Codex websocket liveness deadlines in `internal/runtime/executor/codex_websockets_executor.go`, the wsrelay session deadlines in `internal/wsrelay/session.go`, the management APICall timeout in `internal/api/handlers/management/api_tools.go`, and the `cmd/fetch_antigravity_models` utility timeouts
+
+## Managed Repository Context
+
+- Registry ID: `cliproxyapi` (Agent Infra companion manifest `manifests/companion-repositories.json`)
+- Managed branch: `lwj_dev` (upstream mirror baseline: `main`)
+- Repository convergence authority: Agent Infra registry and sync contract (fetch, classify, safe fast-forward)
+- Owner workflow + product/runtime authority: this repository's own source, `CLAUDE.md`/`AGENTS.md` (symlinked), `README.md` and `docs/`
+- Workflow status: `registered` (`project_workflow=not_migrated`; no managed-project contract yet)
+- Read order: `AGENTS.md`/`CLAUDE.md` -> `README.md` (getting started / management API / usage statistics) -> `docs/` (SDK docs)
+- Update triggers: managed branch or remote change; build/release chain change; platform activation change; service/config/secret ownership change; new stable error class; a completed reusable major update flow
+- Registered clause: the next substantive update task hitting a trigger must either promote the verified workflow into a managed-project contract (`.agent-infra/managed-project.json`) plus human guide and current error catalog, or record a concrete no-op reason
+- Do not invent workflow: until migration, follow only the docs above; do not guess build, service restart, or activation steps
