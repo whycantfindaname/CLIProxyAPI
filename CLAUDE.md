@@ -2,12 +2,6 @@
 
 Go 1.26+ proxy server providing OpenAI/Gemini/Claude/Codex compatible APIs with OAuth and round-robin load balancing.
 
-## Managed repository workflow
-
-- Delivery status: `delivery_pending`; service activation and secret ownership remain platform-owned.
-- Read order: `AGENTS.md`/`CLAUDE.md` -> project documentation.
-- No project-local delivery contract is active. Add a v2 contract only after shared delivery ownership is modeled and the Agent Infra registry is changed to `delivery_contract`.
-
 ## Repository
 - GitHub: https://github.com/router-for-me/CLIProxyAPI
 
@@ -74,8 +68,8 @@ go build -o test-output ./cmd/server && rm test-output # Verify compile (REQUIRE
 - Managed branch: `lwj_dev` (upstream mirror baseline: `main`)
 - Repository convergence authority: Agent Infra registry and sync contract (fetch, classify, safe fast-forward)
 - Owner workflow + product/runtime authority: this repository's own source, `CLAUDE.md`/`AGENTS.md` (symlinked), `README.md` and `docs/`
-- Workflow status: `registered` (`project_workflow=not_migrated`; no managed-project contract yet)
+- Delivery status: `delivery_pending`; service activation and secret ownership remain platform-owned.
 - Read order: `AGENTS.md`/`CLAUDE.md` -> `README.md` (getting started / management API / usage statistics) -> `docs/` (SDK docs)
 - Update triggers: managed branch or remote change; build/release chain change; platform activation change; service/config/secret ownership change; new stable error class; a completed reusable major update flow
-- Registered clause: the next substantive update task hitting a trigger must either promote the verified workflow into a managed-project contract (`.agent-infra/managed-project.json`) plus human guide and current error catalog, or record a concrete no-op reason
-- Do not invent workflow: until migration, follow only the docs above; do not guess build, service restart, or activation steps
+- No project-local delivery contract is active. Add a v2 contract only after shared delivery ownership is modeled and the Agent Infra registry is changed to `delivery_contract`.
+- Do not invent workflow: follow only the docs above; do not guess build, service restart, or activation steps.
