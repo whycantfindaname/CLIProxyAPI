@@ -3,82 +3,88 @@
 ## Comparison state
 
 - Repository: `router-for-me/CLIProxyAPI`
-- Comparison baseline: local `main` and `origin/main` at
-  `bc71c77f5cc42f3fbe1bf040cf14d4f166894835`
-- Active branch: `lwj_dev`
-- Commit `8d1abb420388b0067cd7a91b49dd23b35d314d74` is the existing local
-  instruction-topology change on top of `main`.
-- The branch commits the PR #4587 site patch and this document after that
-  instruction-topology baseline.
+- Upstream comparison baseline: `origin/main` at
+  `81e1b5374f99c212f196f34956eeed964a46b8fa`.
+- Active personal branch: `lwj_dev`.
+- `origin` is the upstream read/synchronization remote; `fork` is the personal
+  publication remote.
+- This document describes source differences only. It does not claim that the
+  branch is pushed, built into a deployed binary, activated, or live-verified.
 
-## Macro summary
+## Branch-owned surfaces
 
-`lwj_dev` preserves this installation's local Codex/Claude instruction entry
-topology and carries a narrow, two-file site patch from upstream PR #4587. The
-site patch routes eligible streaming priority requests arriving through
-HTTP/SSE (including Claude `/v1/messages`) onto the existing Codex upstream
-WebSocket executor when the selected Codex auth explicitly enables
-`websockets`.
+### Agent workflow and platform metadata
 
-No whole PR branch or unrelated upstream commits are merged. Local `main`
-remains the upstream synchronization branch; future updates fetch and
-fast-forward `main`, then merge `main` into `lwj_dev`.
+- `AGENTS.md` is a symbolic link to the regular `CLAUDE.md` instruction source,
+  keeping Codex and Claude Code on one repository-local rule document.
+- `.agents/`, `.claude/`, `.codex/`, `.trellis/`, and `.zcode/` carry the
+  branch-local Trellis workflow, agent definitions, hooks, Skills, specs, and
+  platform adapters.
+- `.gitattributes` preserves the repository treatment required by those
+  workflow files.
 
-## File-by-file differences
+### Codex priority WebSocket routing
 
-### `AGENTS.md`
+- `internal/runtime/executor/codex_websockets_executor.go` routes eligible
+  streaming requests whose resolved payload requests `service_tier=priority`
+  to the existing Codex upstream WebSocket transport when the selected auth
+  explicitly enables `websockets=true`.
+- `internal/runtime/executor/codex_websockets_executor_priority_test.go`
+  covers direct and rule-derived priority, Claude ingress, thinking suffixes,
+  HTTP fallback, image exclusion, downstream WebSocket behavior, and
+  non-streaming scope.
 
-- Committed in `8d1abb42`.
-- Changed from the upstream regular file into a symbolic link to `CLAUDE.md`.
-- Keeps Codex and Claude Code on one repository-local instruction source
-  without a recursive `AGENTS.md`/`CLAUDE.md` reference.
+### Runtime management password file
 
-### `CLAUDE.md`
+- `internal/api/handlers/management/runtime_secret.go` resolves a runtime
+  management password from `MANAGEMENT_PASSWORD` or
+  `MANAGEMENT_PASSWORD_FILE`, with a non-empty direct value taking precedence.
+- The management handler and API server wiring use the resolved value to
+  authenticate and enable management routes.
+- Tests cover unset, direct, file, missing-file, empty-file, precedence, and
+  route-enablement behavior without committing any secret value.
 
-- Committed in `8d1abb42`.
-- Replaces the upstream one-line `@AGENTS.md` indirection with the preserved
-  regular instruction document used by both entrypoints.
+### Prefixed force-mapped model aliases
 
-### `internal/runtime/executor/codex_websockets_executor.go`
+- `sdk/cliproxy/auth/conductor_models.go` restores the full auth-prefixed alias
+  in non-streaming and streaming responses when API-key force mapping is
+  enabled, preventing the upstream model name from leaking into the
+  client-visible response model.
+- `sdk/cliproxy/auth/conductor_force_mapping_test.go` covers both response
+  modes for the prefixed Claude API-key path.
 
-- Committed exact source-file change from PR #4587
-  (`0b4e8b54aa62ae8c9f0d72427d71cb06fd406cc3`).
-- Adds a side-effect-free eligibility check that resolves translation,
-  thinking settings, and payload rules before transport selection.
-- Routes only streaming priority requests with `websockets=true` auths to
-  `CodexWebsocketsExecutor`; standard requests, image requests, non-streaming
-  execution, and existing downstream-WebSocket dispatch retain their prior
-  paths.
+### Claude fingerprint test baseline
 
-### `internal/runtime/executor/codex_websockets_executor_priority_test.go`
+- `internal/runtime/executor/claude_executor_test.go` preserves the personal
+  branch's configured `MacOS`/`arm64` fingerprint assertions. This is a test
+  baseline and does not add a runtime platform override.
 
-- Committed exact test file from PR #4587
-  (`0b4e8b54aa62ae8c9f0d72427d71cb06fd406cc3`).
-- Covers direct priority payloads, fast-alias payload rules, Claude ingress,
-  thinking-suffix rules, standard HTTP fallback, disabled WebSocket auths,
-  downstream-WebSocket behavior, image exclusion, and non-streaming scope.
+### Upstream integration formatting
 
-### `diff.md`
+- `internal/pluginhost/host.go`,
+  `internal/runtime/executor/claude_thinking_replay_test.go`, and
+  `internal/runtime/executor/codex_stream_bootstrap_buffering_test.go` contain
+  formatting-only `gofmt` normalization applied while integrating upstream
+  `81e1b5374f99c212f196f34956eeed964a46b8fa`.
 
-- Committed local documentation file.
-- Records the committed and working-tree differences between `lwj_dev` and
-  `main`, including this file itself.
+## Verification entry points
+
+```bash
+go test ./internal/runtime/executor -run 'CodexAutoExecutor|CodexPriority|TestApplyClaudeHeaders'
+go test ./internal/api/handlers/management -run TestLoadRuntimeManagementSecret
+go test ./internal/api -run TestManagementPasswordFile
+go test ./sdk/cliproxy/auth -run TestManagerExecute_APIKeyPrefixedAliasForceMappingRestoresFullModel
+go test ./...
+go build -o test-output ./cmd/server
+git diff --check
+```
+
+Use the explicit command environments required by `CLAUDE.md`. Build output is
+temporary and must not be committed.
 
 ## State outside the Git diff
 
-Codex auth JSON state is runtime configuration outside this repository's
-tracked diff. Setting `websockets: true`, its restricted backup, and any later
-restore are operational state changes and are not represented as source
-changes above.
-
-The deployed binary under the workspace `.local/bin` directory, supervisor
-PIDs, shadow instance state, benchmark evidence, and production rollout or
-rollback are also repository-external runtime state. A successful source build
-or working-tree diff does not imply that production has been published.
-
-The supervisor control script under workspace `.config/cliproxyapi` is also
-outside this Git repository. During rollout it was corrected to use exact tmux
-session existence matching, preventing an acceptance session whose name starts
-with `cliproxyapi-` from being mistaken for the production `cliproxyapi`
-session. That operational script change is not part of the PR #4587 source
-diff.
+Auth JSON, management-password files, provider credentials, deployed binaries,
+service supervisors, PIDs, logs, and runtime configuration are outside this
+repository's tracked source. Source tests and builds do not establish runtime
+activation, deployment, or provider connectivity.
