@@ -2,6 +2,12 @@
 
 Go 1.26+ proxy server providing OpenAI/Gemini/Claude/Codex compatible APIs with OAuth and round-robin load balancing.
 
+## Managed repository workflow
+
+- Delivery status: `delivery_pending`; service activation and secret ownership remain platform-owned.
+- Read order: `AGENTS.md`/`CLAUDE.md` -> project documentation.
+- No project-local delivery contract is active. Add a v2 contract only after shared delivery ownership is modeled and the Agent Infra registry is changed to `delivery_contract`.
+
 ## Repository
 - GitHub: https://github.com/router-for-me/CLIProxyAPI
 
