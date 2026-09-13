@@ -15,7 +15,11 @@ func TestNormalizeOpenAIToolResultsTextOnly(t *testing.T) {
             {"type":"image_url","image_url":{"url":"data:image/png;base64,AA=="}}
         ]},
         {"role":"tool","tool_call_id":"call_2","content":"already text"},
-        {"role":"user","content":[{"type":"image_url","image_url":{"url":"https://example.com/user.png"}}]}
+        {"role":"user","content":[{"type":"image_url","image_url":{"url":"https://example.com/user.png"}}]},
+        {"role":"user","content":[
+            {"type":"text","text":"Images returned by the preceding tool call(s):"},
+            {"type":"image_url","image_url":{"url":"https://example.com/tool.png"}}
+        ]}
     ]}`)
 
 	got := NormalizeOpenAIToolResultsTextOnly(input)
@@ -36,6 +40,25 @@ func TestNormalizeOpenAIToolResultsTextOnly(t *testing.T) {
 	if !gjson.GetBytes(got, "messages.3.content").IsArray() {
 		t.Fatal("non-tool content array was unexpectedly changed")
 	}
+	relayContent := gjson.GetBytes(got, "messages.4.content")
+	if relayContent.Get(`#(type=="image_url")`).Exists() {
+		t.Fatalf("tool image relay still contains image: %s", string(got))
+	}
+	if !hasOpenAITextPart(relayContent, openAIToolResultImageOmittedText) {
+		t.Fatalf("tool image relay lacks omission marker: %s", string(got))
+	}
+}
+
+func hasOpenAITextPart(content gjson.Result, want string) bool {
+	if !content.IsArray() {
+		return false
+	}
+	for _, part := range content.Array() {
+		if part.Get("type").String() == "text" && part.Get("text").String() == want {
+			return true
+		}
+	}
+	return false
 }
 
 func TestNormalizeOpenAIToolResultsTextOnlyImageAndUnknownContent(t *testing.T) {
