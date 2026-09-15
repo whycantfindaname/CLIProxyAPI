@@ -678,6 +678,11 @@ func TestCodexExecutor_BootstrapBuffering_ByteCapReleasesStream(t *testing.T) {
 	if result == nil {
 		t.Fatal("expected a stream result once the byte cap released the stream")
 	}
+	// Consume the stream before closing the test server. The byte-cap release
+	// hands ownership of the response body to the stream goroutine; leaving the
+	// chunks unread blocks that goroutine and makes httptest.Server.Close wait
+	// on Windows.
+	_, _ = drainChunks(result)
 }
 
 // Upstream interleaves keepalive heartbeats and item announcements while the model is still

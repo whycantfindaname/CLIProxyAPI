@@ -463,6 +463,12 @@ func TestNewLifetimePreservesClusterFailoverState(t *testing.T) {
 
 func TestEnsureClientsWaitsForPreviousTargetClose(t *testing.T) {
 	client := New(config.HomeConfig{Enabled: true, Host: "next.example.com", Port: 8327})
+	// Keep this regression focused on the close gate. Redis client construction
+	// allocates two connection pools and can exceed the one-second continuation
+	// window on a busy Windows worker even though it performs no dial here.
+	client.cmd = redis.NewClient(&redis.Options{Addr: "127.0.0.1:1"})
+	client.sub = redis.NewClient(&redis.Options{Addr: "127.0.0.1:1"})
+	t.Cleanup(client.Close)
 	closing := make(chan struct{})
 	client.closing = closing
 	done := make(chan error, 1)
@@ -484,7 +490,6 @@ func TestEnsureClientsWaitsForPreviousTargetClose(t *testing.T) {
 	case <-time.After(time.Second):
 		t.Fatal("ensureClients() did not continue after previous target closed")
 	}
-	client.Close()
 }
 
 func TestConcurrencyReleaseDoesNotOpenBeforeMembershipReady(t *testing.T) {

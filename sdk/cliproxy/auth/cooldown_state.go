@@ -221,7 +221,7 @@ func writeCooldownStateGroup(ctx context.Context, path string, records []Cooldow
 		_ = os.Remove(tmp)
 		return fmt.Errorf("close cooldown state temp file: %w", errClose)
 	}
-	if errRename := os.Rename(tmp, path); errRename != nil {
+	if errRename := replaceCooldownStateFile(tmp, path); errRename != nil {
 		_ = os.Remove(tmp)
 		return fmt.Errorf("replace cooldown state file: %w", errRename)
 	}
