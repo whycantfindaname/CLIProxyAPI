@@ -4,6 +4,7 @@ cli-proxy-api
 
 # Configuration
 config.yaml
+!/.trellis/config.yaml
 .env
 
 # Generated content
