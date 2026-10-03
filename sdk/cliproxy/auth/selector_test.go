@@ -892,9 +892,9 @@ func TestExtractSessionID(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			got := extractSessionID([]byte(tt.payload))
+			got := ExtractSessionID(nil, []byte(tt.payload), nil)
 			if got != tt.want {
-				t.Errorf("extractSessionID() = %q, want %q", got, tt.want)
+				t.Errorf("ExtractSessionID() = %q, want %q", got, tt.want)
 			}
 		})
 	}

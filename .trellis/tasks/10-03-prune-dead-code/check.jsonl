@@ -1,0 +1,2 @@
+{"file": ".trellis/spec/backend/directory-structure.md", "reason": "Review two-file ownership and preserved SDK interface"}
+{"file": ".trellis/spec/backend/quality-guidelines.md", "reason": "Verify preserved payload assertions and required full tests/build"}
